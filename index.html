@@ -1166,7 +1166,7 @@ const SHARE_DEFAULTS = {"url": "https://iimurggownawprcgmfas.supabase.co", "key"
 const SHARE_BUILTIN = !!(SHARE_DEFAULTS.url && SHARE_DEFAULTS.key && SHARE_DEFAULTS.viewerUrl);
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20261004.083031';
+const APP_BUILD = '20261004.084146';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -3138,9 +3138,20 @@ function computeGroupStandings(entryIds, matches, tiebreak){
 /* Americano / Mexicano table order. 'wins' (default): most matches won, then
    most points won, then best point difference. 'points': classic Americano,
    total points won first (wins only break ties). Set per event in Edit event. */
-const AMERICANO_RANKINGS = [['wins','Wins first, then points won'],['points','Points won (classic Americano)']];
+const AMERICANO_RANKINGS = [['wins','Wins first, then points'],['points','Points (classic Americano)']];
 function americanoRankingFor(ev){ return (ev && ev.americanoRanking==='points') ? 'points' : 'wins'; }
-function americanoRankingLabel(ev){ return americanoRankingFor(ev)==='points' ? 'Ranked by points won, then wins' : 'Ranked by wins, then points won'; }
+/* Bonus points per match won, added to a player's points (the Points column).
+   Default: the event's points per game (21 usually), so one win outweighs any
+   close loss and the points line up with the wins. 0 = no bonus. */
+function americanoWinBonus(ev){
+  if(!ev) return 0;
+  if(ev.americanoWinBonus!=null && ev.americanoWinBonus!=='') return Math.max(0, parseInt(ev.americanoWinBonus,10)||0);
+  return (ev.scoringOverride && ev.scoringOverride.pointsToWin) || 21;
+}
+function americanoRankingLabel(ev){
+  const b = americanoWinBonus(ev), bonus = b ? ` (points include ${b} per win)` : '';
+  return (americanoRankingFor(ev)==='points' ? 'Ranked by points, then wins' : 'Ranked by wins, then points') + bonus;
+}
 function americanoRankingNote(ev){ return `<div class="helptext" style="margin-top:6px">${esc(americanoRankingLabel(ev))}.</div>`; }
 function computeAmericanoStandings(individualEntries, matches, ranking){
   const rows = {};
@@ -3153,11 +3164,14 @@ function computeAmericanoStandings(individualEntries, matches, ranking){
     entryPlayerIds(e1).forEach(pid=>{ if(!rows[pid]) return; rows[pid].played++; rows[pid].pointsFor+=p1; rows[pid].pointsAgainst+=p2; if(aWon) rows[pid].wins++; else rows[pid].losses++; });
     entryPlayerIds(e2).forEach(pid=>{ if(!rows[pid]) return; rows[pid].played++; rows[pid].pointsFor+=p2; rows[pid].pointsAgainst+=p1; if(aWon) rows[pid].losses++; else rows[pid].wins++; });
   });
-  if(!ranking){ const en = individualEntries[0] || matches[0]; ranking = americanoRankingFor(en && eventById(en.eventId)); }
+  const ref = individualEntries[0] || matches[0], ev = ref && eventById(ref.eventId);
+  if(!ranking) ranking = americanoRankingFor(ev);
+  const bonus = americanoWinBonus(ev);
+  Object.values(rows).forEach(r=>{ r.bonus = bonus*r.wins; r.total = r.pointsFor + r.bonus; });
   const diff = r=>r.pointsFor-r.pointsAgainst, name = (a,b)=>playerName(a.playerId).localeCompare(playerName(b.playerId));
   return Object.values(rows).sort(ranking==='points'
-    ? (a,b)=> b.pointsFor-a.pointsFor || b.wins-a.wins || diff(b)-diff(a) || name(a,b)
-    : (a,b)=> b.wins-a.wins || b.pointsFor-a.pointsFor || diff(b)-diff(a) || name(a,b));
+    ? (a,b)=> b.total-a.total || b.wins-a.wins || diff(b)-diff(a) || name(a,b)
+    : (a,b)=> b.wins-a.wins || b.total-a.total || diff(b)-diff(a) || name(a,b));
 }
 
 /* ============================== RANKING POINTS ============================== */
@@ -3612,7 +3626,7 @@ async function createEvent(tournamentId, data){
     tournamentId, name:data.name, type:data.type||'singles', ageGroup:data.ageGroup||'none',
     maxParticipants:data.maxParticipants||32, drawFormat:data.drawFormat||'single_elimination',
     thirdPlaceMatch: !!data.thirdPlaceMatch, scoringOverride: data.scoringOverride||null, knockoutScoring: data.knockoutScoring||null,
-    americanoVariant: data.americanoVariant||'classic', americanoRanking: data.americanoRanking||'wins', status:'registration_open'
+    americanoVariant: data.americanoVariant||'classic', americanoRanking: data.americanoRanking||'wins', americanoWinBonus: data.americanoWinBonus ?? null, status:'registration_open'
   }), 'Event added');
 }
 async function updateEvent(id, patch){ return act(async ()=> Store.update('events', id, patch)); }
@@ -5513,7 +5527,7 @@ function renderAmericanoStandingsTable(rows){
   if(!rows.length) return `<div class="empty-tab">No players.</div>`;
   return `<div class="table-scroll"><table class="standings"><thead><tr><th>#</th><th>Player</th><th class="num">P</th><th class="num">W-L</th><th class="num">Points</th></tr></thead>
   <tbody>${rows.map((r,i)=>`<tr class="rank-${i+1} ${followedPlayer() && r.playerId===followedPlayer().id?'me-row':''}"><td class="rk mono">${i+1}</td><td>${esc(playerName(r.playerId))}</td><td class="num mono">${r.played}</td><td class="num mono">${r.wins}-${r.losses}</td>
-    <td class="num mono">${r.pointsFor}</td></tr>`).join('')}</tbody></table></div>`;
+    <td class="num mono" ${r.bonus?`title="${r.pointsFor} won + ${r.bonus} win bonus"`:''}>${r.total ?? r.pointsFor}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function renderDrawsTab(t){
   if(state.role==='admin' && !VIEWER) return renderAdminDrawsTab(t);
@@ -5793,7 +5807,7 @@ function renderEventResultsCard(ev){
     computeGroupStandings(entries.map(e=>e.id), matches.filter(m=>m.entry1Id && m.entry2Id), TIEBREAK_DEFAULT).forEach(r=>{ stats[r.entryId] = r; });
   }
   const rows = entries.map(e=>({entry:e, st:stats[e.id]||{played:0,wins:0,losses:0,pointsFor:0}, ...(placements[e.id]||{points:0,label:'',provisional:true})}))
-    .sort((a,b)=> (b.provisional?0:b.points)-(a.provisional?0:a.points) || ((a.rank||999)-(b.rank||999)) || (b.st.wins-a.st.wins) || (b.st.pointsFor-a.st.pointsFor));
+    .sort((a,b)=> (b.provisional?0:b.points)-(a.provisional?0:a.points) || ((a.rank||999)-(b.rank||999)) || (b.st.wins-a.st.wins) || ((b.st.total??b.st.pointsFor)-(a.st.total??a.st.pointsFor)));
   const played = matches.some(m=>['completed','walkover','retired'].includes(m.status));
   const final = ev.status==='completed' || (played && matches.every(m=>['completed','walkover','retired','bye','cancelled'].includes(m.status)));
   const st = final ? 'Final' : played ? 'In progress' : 'Not started';
@@ -5802,12 +5816,12 @@ function renderEventResultsCard(ev){
   return `<div class="card res-card">
     ${head(st)}
     ${champ.length ? `<div class="champ-banner">${ICONS.trophy}<span><small>Champion</small>${esc(champ.join(' & '))}</span></div>` : ''}
-    <div class="table-scroll"><table class="data-table res-table"><thead><tr><th class="rk">#</th><th>${isDoublesType(ev.type)&&!isAm?'Team':'Player'}</th><th class="num">W-L</th><th class="num" title="Rally points won">Pts won</th><th class="num" title="Ranking points">Rank pts</th></tr></thead>
+    <div class="table-scroll"><table class="data-table res-table"><thead><tr><th class="rk">#</th><th>${isDoublesType(ev.type)&&!isAm?'Team':'Player'}</th><th class="num">W-L</th>${isAm?`<th class="num" title="Points won${americanoWinBonus(ev)?' plus '+americanoWinBonus(ev)+' per win':''}">Points</th>`:`<th class="num" title="Rally points won">Pts won</th>`}<th class="num" title="Ranking points">Rank pts</th></tr></thead>
     <tbody>${rows.map((r,i)=>`<tr class="${fp && entryPlayerIds(r.entry).includes(fp.id)?'me-row':''} ${r.label==='Champion'?'champ':''}">
       <td class="rk mono">${i+1}</td>
       <td><div class="res-nm">${esc(entryName(r.entry))}</div>${r.label && r.label!=='Not started'?`<div class="res-pl">${esc(r.label.replace(' (still in)',' · still in'))}</div>`:''}</td>
       <td class="num mono"><span class="w">${r.st.wins}</span>-<span class="l">${r.st.losses}</span></td>
-      <td class="num mono">${r.st.pointsFor}</td>
+      <td class="num mono" ${isAm && r.st.bonus?`title="${r.st.pointsFor} won + ${r.st.bonus} win bonus"`:''}>${isAm ? (r.st.total ?? r.st.pointsFor) : r.st.pointsFor}</td>
       <td class="num mono res-rp">${r.provisional?'&ndash;':r.points}</td></tr>`).join('')}</tbody></table></div>
     ${isAm ? americanoRankingNote(ev) : ''}
     ${rows.some(r=>r.provisional) ? `<div class="helptext" style="margin-top:6px">Rank points are given once every match in the event is played.</div>` : ''}
@@ -6231,7 +6245,7 @@ const GUIDE = [
   {id:'events', title:'3 · Create events', steps:[
     'Open the tournament → <b>Events</b> → <b>+ Add event</b>.',
     'Give it a name (e.g. Men’s Singles) and pick the type: singles, doubles or mixed doubles. A <b>mixed doubles</b> pair must be one man and one woman.',
-    'Choose the format:<ul><li><b>Single / double elimination</b> – knockout bracket</li><li><b>Round robin</b> – everyone plays everyone</li><li><b>Groups + knockout</b> – group stage, then a bracket (can have its own knockout scoring)</li><li><b>Americano</b> – new partner every round (Classic, Mixed or Mexicano). Players are ranked by matches won, then points won; Edit event can switch to classic points-only ranking</li></ul>',
+    'Choose the format:<ul><li><b>Single / double elimination</b> – knockout bracket</li><li><b>Round robin</b> – everyone plays everyone</li><li><b>Groups + knockout</b> – group stage, then a bracket (can have its own knockout scoring)</li><li><b>Americano</b> – new partner every round (Classic, Mixed or Mexicano). Players are ranked by matches won, then points. Each win also adds bonus points (by default the points per game), so the points line up with the wins; both can be changed in Edit event</li></ul>',
     'Set the scoring if it differs from the tournament default, then tap <b>Save</b>. You land on Settings → Draws for the new event.'
   ]},
   {id:'entries', title:'4 · Register players and set seeds', steps:[
@@ -6781,6 +6795,8 @@ function openEventDialog(tid, existing){
           .map(p=>`<option value="${p}" ${amPoints.points===p?'selected':''}>${p} points${p===21?' (standard)':''}</option>`).join('')}
       </select></div>
       <label class="row" style="font-size:12.5px;gap:6px"><input type="checkbox" id="fEAmDeuce" ${amPoints.deuce?'checked':''}> Deuce: win by 2 points</label>
+      <div class="field" style="margin-top:8px"><label>Bonus points per win</label><input type="number" id="fEAmBonus" min="0" max="99" value="${existing ? americanoWinBonus(ev) : amPoints.points}" data-auto="${!existing || ev.americanoWinBonus==null || ev.americanoWinBonus==='' ? '1' : ''}"></div>
+      <div class="helptext">Added to a player's points for every match won. Same as the points per game keeps the points in line with the wins; 0 for none.</div>
       <div class="helptext" id="fEAmRule" style="margin-top:6px"></div>
       <div class="helptext">Each match is one game. Both players on a team earn the points their team scores toward their individual total.</div>
     </div>
@@ -6834,6 +6850,10 @@ function openEventDialog(tid, existing){
       : 'First to '+pts+' wins, even by one point.';
   }
   document.getElementById('fEAmPoints').addEventListener('change', refreshAmRule);
+  // The bonus follows the points per game until the organiser types their own.
+  const bonusEl = document.getElementById('fEAmBonus');
+  bonusEl.addEventListener('input', ()=>{ bonusEl.dataset.auto = ''; });
+  document.getElementById('fEAmPoints').addEventListener('change', ()=>{ if(bonusEl.dataset.auto) bonusEl.value = document.getElementById('fEAmPoints').value; });
   document.getElementById('fEAmDeuce').addEventListener('change', refreshAmRule);
   refreshAmRule();
   const amVariantEl = document.getElementById('fEAmVariant');
@@ -6865,6 +6885,7 @@ function openEventDialog(tid, existing){
       drawFormat:format, thirdPlaceMatch:document.getElementById('fEThird').checked,
       americanoVariant: format==='americano' ? document.getElementById('fEAmVariant').value : (ev.americanoVariant||'classic'),
       americanoRanking: format==='americano' ? document.getElementById('fEAmRanking').value : americanoRankingFor(ev),
+      americanoWinBonus: format==='americano' ? Math.max(0, Math.min(99, parseInt(document.getElementById('fEAmBonus').value,10)||0)) : (ev.americanoWinBonus ?? null),
       scoringOverride: format==='americano'
         ? americanoScoringFromPoints(parseInt(document.getElementById('fEAmPoints').value,10)||21, document.getElementById('fEAmDeuce').checked)
         : (useCustom ? {
