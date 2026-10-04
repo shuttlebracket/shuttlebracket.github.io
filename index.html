@@ -627,8 +627,9 @@
   .trend.down{ color:var(--danger); }
   .trend.same{ color:var(--faint); }
   .trend.new{ color:var(--court); font-size:10px; letter-spacing:.04em; }
-  .rk-trend{ line-height:1; margin-top:2px; }
-  .rk-trend .trend{ font-size:10.5px; }
+  table.standings td.tr-cell, table.standings th.tr-cell{ width:1%; padding-right:2px; text-align:left; white-space:nowrap; }
+  .trend .ud{ display:inline-flex; flex-direction:column; align-items:center; font-size:8px; line-height:.9; }
+  .trend .ud i{ font-style:normal; display:block; }
   .pill.rank-pill{ font-weight:800; }
   .pill.rank-pill .trend{ margin-left:4px; }
   .res-table .l{ color:var(--muted); }
@@ -1175,7 +1176,7 @@ const SHARE_DEFAULTS = {"url": "https://iimurggownawprcgmfas.supabase.co", "key"
 const SHARE_BUILTIN = !!(SHARE_DEFAULTS.url && SHARE_DEFAULTS.key && SHARE_DEFAULTS.viewerUrl);
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20261004.175321';
+const APP_BUILD = '20261004.175948';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -3553,7 +3554,7 @@ function rankingsWithTrend(filterFn){
 function trendHtml(trend, compact){
   if(trend==null) return '';
   if(trend==='new') return `<span class="trend new" title="Newly ranked">NEW</span>`;
-  if(trend===0) return `<span class="trend same" title="No change">&ndash;</span>`;
+  if(trend===0) return `<span class="trend same" title="No change" aria-label="No change"><span class="ud"><i>&#9650;</i><i>&#9660;</i></span></span>`;
   const up = trend>0, n = Math.abs(trend);
   return `<span class="trend ${up?'up':'down'}" title="${up?'Up':'Down'} ${n} place${n===1?'':'s'}">${up?'&#9650;':'&#9660;'}${compact?'':' '}${n}</span>`;
 }
@@ -6210,8 +6211,8 @@ function renderRankingsView(){
     </div>
     ${(()=>{ const n = allRanked.filter(s=>normGender((s.player||{}).gender)==='unspecified').length;
       return n && f.gender && f.gender!=='unspecified' ? `<div class="helptext" style="margin:-4px 0 10px">${n} ranked player${n===1?' has':'s have'} no gender set, so ${n===1?'is':'are'} left out here. Pick "Not set" to see ${n===1?'them':'them'}, and set it from Players.</div>` : ''; })()}
-    <div class="table-scroll"><table class="standings"><thead><tr><th title="${showTrend?'Rank (and change since before '+esc(since.name)+')':'Rank'}">#</th><th>Player</th><th class="num">Pts</th><th class="num">Titles</th><th class="num">W-L</th><th class="num">Win %</th>${VIEWER?'':'<th class="num m-hide">Tournaments</th>'}</tr></thead>
-    <tbody>${stats.map((s,i)=>`<tr class="rank-${i+1} ${followedPlayer() && s.playerId===followedPlayer().id?'me-row':''}"><td class="rk mono">${i+1}${showTrend&&s.trend!=null?`<div class="rk-trend">${trendHtml(s.trend, true)}</div>`:''}</td><td>${esc((s.player||{}).name||'Unknown')}</td><td class="num mono">${s.rankingPoints}</td>
+    <div class="table-scroll"><table class="standings"><thead><tr>${showTrend?`<th class="tr-cell" title="Change since before ${esc(since.name)}"></th>`:''}<th>#</th><th>Player</th><th class="num">Pts</th><th class="num">Titles</th><th class="num">W-L</th><th class="num">Win %</th>${VIEWER?'':'<th class="num m-hide">Tournaments</th>'}</tr></thead>
+    <tbody>${stats.map((s,i)=>`<tr class="rank-${i+1} ${followedPlayer() && s.playerId===followedPlayer().id?'me-row':''}">${showTrend?`<td class="tr-cell">${trendHtml(s.trend, true)}</td>`:''}<td class="rk mono">${i+1}</td><td>${esc((s.player||{}).name||'Unknown')}</td><td class="num mono">${s.rankingPoints}</td>
       <td class="num mono">${s.titles}</td><td class="num mono">${s.wins}-${s.losses}</td><td class="num mono">${s.winPct}%</td>${VIEWER?'':`<td class="num mono m-hide">${s.tournamentsCount}</td>`}</tr>`).join('') || `<tr><td colspan="7" class="empty-tab">No ranked players yet.</td></tr>`}
     </tbody></table></div>
     ${showTrend && stats.length ? `<div class="helptext" style="margin-top:8px">&#9650;&#9660; places moved since before <b>${esc(since.name)}</b> &middot; NEW = first ranked there.</div>` : ''}
@@ -6334,7 +6335,7 @@ const GUIDE = [
     'To close the whole tournament use <b>⋯ → Finish tournament</b> at the top; <b>Reopen tournament</b> is in the same menu.',
     'A finished event or tournament is locked: no new players, courts, draws, schedule changes or scores until you reopen it.',
     '<b>Rankings</b> (bottom bar) adds up ranking points from every event. Tap <b>How points work</b> there for the table. Filter by gender or club, and use <b>Clear filters</b> to reset.',
-    'Under each rank, ▲ / ▼ shows how many places a player moved since before the latest tournament (NEW = first ranked there). Each player’s rank and points also show on their card in <b>Players</b>.'
+    'Next to each rank, ▲ / ▼ shows how many places a player moved since before the latest tournament (a grey ▲▼ = no change, NEW = first ranked there). Each player’s rank and points also show on their card in <b>Players</b>.'
   ]},
   {id:'share', title:'8 · Share a live link', steps:[
     ...(SHARE_BUILTIN ? [] : ['One-time setup: in the app <b>Settings → Live sharing</b>, enter your Supabase project URL, key and viewer page address, then <b>Test connection</b>.']),
