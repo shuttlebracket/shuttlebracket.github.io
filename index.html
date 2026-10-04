@@ -630,7 +630,9 @@
   table.standings td.tr-cell, table.standings th.tr-cell{ width:1%; padding-right:2px; text-align:left; white-space:nowrap; }
   .trend .ud{ display:inline-flex; flex-direction:column; align-items:center; font-size:8px; line-height:.9; }
   .trend .ud i{ font-style:normal; display:block; }
-  .pill.rank-pill{ font-weight:800; }
+  .pill.rank-pill{ font-weight:800; color:#fff; border:none; background:linear-gradient(135deg,#6d52ff 0%,#9a5cf7 55%,#e052e4 100%);
+    box-shadow:0 2px 8px rgba(122,76,246,.35); text-shadow:0 1px 1px rgba(0,0,0,.18); }
+  .pill.rank-pill.top{ background:linear-gradient(135deg,#ffb020 0%,#ff7a3d 60%,#f2643b 100%); box-shadow:0 2px 8px rgba(242,100,59,.38); }
   .pill.rank-pill .trend{ margin-left:4px; }
   .res-table .l{ color:var(--muted); }
   .res-rp{ font-weight:800; }
@@ -1176,7 +1178,7 @@ const SHARE_DEFAULTS = {"url": "https://iimurggownawprcgmfas.supabase.co", "key"
 const SHARE_BUILTIN = !!(SHARE_DEFAULTS.url && SHARE_DEFAULTS.key && SHARE_DEFAULTS.viewerUrl);
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20261004.180819';
+const APP_BUILD = '20261004.181950';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -6151,7 +6153,7 @@ function renderAdminTournamentPlayersTab(t){
   `;
 }
 function rankPillHtml(r){
-  return r ? `<span class="pill rank-pill" title="Current ranking">Rank #${r.rank}</span>` : `<span class="pill" style="color:var(--faint)">Unranked</span>`;
+  return r ? `<span class="pill rank-pill ${r.rank<=3?'top':''}" title="Current ranking">Rank #${r.rank}</span>` : `<span class="pill" style="color:var(--faint)">Unranked</span>`;
 }
 function renderPlayerCards(players){
   if(!players.length) return `<div class="empty-tab">No players to show.</div>`;
