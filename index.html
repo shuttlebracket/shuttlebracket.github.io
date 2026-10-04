@@ -507,6 +507,19 @@
 
   /* ---------- phone-only pieces (hidden on wider screens) ---------- */
   .mobile-only{ display:none !important; }
+  .m-menu-only{ display:none !important; }            /* listed only in the ⋯ sheet, at every width */
+  .m-more-btn.always{ display:inline-flex !important; }
+  .ev-setup .ev-sum{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding-bottom:12px; margin-bottom:12px; border-bottom:1px solid var(--border); }
+  .ev-setup .ev-sum .grow{ flex:1; min-width:0; }
+  .ev-setup .ev-setup-acts{ display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+  .ev-pop-row{ display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); }
+  .ev-pop-row:last-child{ border-bottom:none; }
+  .ev-pop-row .grow{ flex:1; min-width:0; }
+  .ev-pop-row select{ width:124px; flex:none; }
+  .ev-pop-row input{ flex:none; }
+  .ev-pop-row select, .ev-pop-row input{ border:1px solid var(--border); border-radius:8px; padding:5px 6px; background:var(--bg); color:var(--ink); font:inherit; font-size:13px; }
+  .ev-pop-add{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
+  .ev-pop-add select{ flex:1 1 150px; min-width:0; border:1px solid var(--border); border-radius:9px; padding:8px; background:var(--bg); color:var(--ink); font:inherit; font-size:14px; }
   .tabbar{ display:none; }
   .sched-list{ display:none; }
 
@@ -1153,7 +1166,7 @@ const SHARE_DEFAULTS = {"url": "https://iimurggownawprcgmfas.supabase.co", "key"
 const SHARE_BUILTIN = !!(SHARE_DEFAULTS.url && SHARE_DEFAULTS.key && SHARE_DEFAULTS.viewerUrl);
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20261003.202231';
+const APP_BUILD = '20261004.071855';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -2367,7 +2380,7 @@ async function addAmericanoRounds(event, count){
     const draw = eventDraw(event.id);
     if(!draw || draw.format!=='americano') throw new Error('Generate the Americano draw first.');
     const variant = event.americanoVariant||'classic';
-    if(variant==='mexicano') throw new Error('Mexicano adds rounds one at a time with "Generate next round".');
+    if(variant==='mexicano') throw new Error('Mexicano adds rounds one at a time with "Next round".');
     if(americanoFinalMatch(event.id)) throw new Error('Remove the final before adding more rounds.');
     count = Math.max(1, Math.min(60, parseInt(count,10)||1));
     const pids = eventEntries(event.id).filter(e=>!e.isAmericanoTeam).map(e=>e.player1Id);
@@ -3403,7 +3416,7 @@ function lockReason(t, ev){
   return null;
 }
 const LOCK_T_IDS = new Set(['btnRegisterPlayerHeader','btnNewEvent','btnNewCourt','btnTournamentAddPlayer','btnNewPlayerFromTournament','btnEditTournament','btnSaveScoring','btnSaveLogistics','btnAssignAny']);
-const LOCK_EV_IDS = new Set(['btnBuildEntries','btnGenerateDraw','btnGenKnockout','btnGenNextMexicanoRound','btnFinishMexicano','btnEditEvent','btnSwapEntries']);
+const LOCK_EV_IDS = new Set(['btnGenerateDraw','btnGenKnockout','btnGenNextMexicanoRound','btnFinishMexicano','btnEditEvent','btnSwapEntries']);
 /* Called first on every click: returns a message when the click would change something locked. */
 function lockedClickMessage(target, t){
   if(!t || state.role!=='admin' || VIEWER) return null;
@@ -3413,7 +3426,7 @@ function lockedClickMessage(target, t){
   if(btn.id && LOCK_EV_IDS.has(btn.id)) return lockReason(t, eventById(state.eventId));
   const a = n=>btn.getAttribute(n);
   if(a('data-toggle-court') || a('data-delete-court') || a('data-delete-event') || a('data-finish-event') || a('data-reopen-event')) return lockReason(t, null);
-  const evAttr = a('data-admin-register-event') || a('data-add-am-rounds') || a('data-am-final') || a('data-am-final-remove');
+  const evAttr = a('data-admin-register-event') || a('data-ev-players') || a('data-ev-seeds') || a('data-add-am-rounds') || a('data-am-final') || a('data-am-final-remove');
   if(evAttr) return lockReason(t, eventById(evAttr));
   const mid = a('data-open-live') || a('data-open-schedule') || a('data-open-decide') || a('data-open-correct') || a('data-start-match') || a('data-unstart-match');
   if(mid){ const m = matchById(mid); if(m) return lockReason(t, eventById(m.eventId)); }
@@ -3673,7 +3686,7 @@ async function handleWithdrawal(reg){
 }
 
 /* Build actual draw entries from confirmed registrations (paired for doubles). */
-async function buildEntriesFromRegistrations(event){
+async function buildEntriesFromRegistrations(event, opts){
   return act(async ()=>{
     const allRegs = await Store.getAll('registrations', [['eventId', event.id]]);
     const regs = allRegs.filter(r=> r.status==='confirmed');
@@ -3714,7 +3727,7 @@ async function buildEntriesFromRegistrations(event){
       else await Store.add('entries', data);
     }
     if(badMixed.length) toast('Left out of '+event.name+' (mixed doubles needs one man and one woman): '+badMixed.join(', '), true);
-  }, 'Entries built from confirmed registrations');
+  }, opts && opts.quiet ? null : 'Entries built from confirmed registrations');
 }
 
 /* A seed is a whole number from 1; anything else means unseeded. */
@@ -3787,6 +3800,7 @@ function openSuggestSeedsDialog(ev){
       }
     }, 'Seeds applied from rankings');
     closeGenericDialog(); render();
+    openEventSeedsDialog(ev.id);   // back to the seeds list, now filled in
   };
 }
 
@@ -4810,6 +4824,20 @@ function render(){
   app.innerHTML = shellHtml();
   postRenderHooks();
   applyStoredTheme();
+  refreshOpenDialog();
+}
+/* A pop-up that lists live data (event players, seeds) redraws its body after
+   every change; closing the dialog stops it. */
+let dialogRefresher = null;
+function setDialogRefresher(fn){
+  dialogRefresher = fn;
+  const dlg = document.getElementById('dlgGeneric');
+  if(dlg) dlg.addEventListener('close', ()=>{ if(dialogRefresher===fn) dialogRefresher = null; }, {once:true});
+}
+function refreshOpenDialog(){
+  const dlg = document.getElementById('dlgGeneric');
+  if(!dialogRefresher || !dlg || !dlg.open) return;
+  try{ dialogRefresher(); }catch(e){ console.error(e); }
 }
 
 function unreadNotifCount(){
@@ -5222,74 +5250,82 @@ function regStatusPill(s){
 }
 function renderEventsTab(t){
   const evs = tEvents(t.id);
+  const admin = state.role==='admin' && !VIEWER;
   return `
-    <div class="row between wrap" style="margin-bottom:12px">
-      <div class="helptext">${evs.length} event${evs.length===1?'':'s'}</div>
-      <button class="btn btn-primary btn-sm" id="btnNewEvent" ${t.status==='completed'?'disabled title="Reopen the tournament to add events"':''}>${ICONS.plus} Add event</button>
-    </div>
-    ${evs.length ? `<div class="cat-grid">${evs.map(renderEventCard).join('')}</div>
-      <div class="helptext" style="margin-top:10px">${t.status==='completed' ? 'This tournament is finished. To add an event, reopen it from the &#8943; menu at the top.' : 'Tap an event to see its matches. Players, entries and the draw are set up under Settings &rarr; Draws.'}</div>` : `<div class="empty-tab">No events yet. Add one (e.g. Men's Singles).</div>`}
+    ${admin && t.status!=='completed' ? `<div class="row" style="justify-content:flex-end;margin-bottom:12px"><button class="btn btn-primary btn-sm" id="btnNewEvent">${ICONS.plus} Add event</button></div>` : ''}
+    ${evs.length ? `<div class="cat-grid">${evs.map(renderEventCard).join('')}</div>` : `<div class="empty-tab">No events yet.${admin && t.status!=='completed' ? ' Add one (e.g. Men’s Singles).' : ''}</div>`}
   `;
 }
 function renderEventCard(ev){
-  const entries = eventEntries(ev.id).filter(e=>!e.isAmericanoTeam).length;
+  const entries = eventEntries(ev.id).filter(e=>!e.isAmericanoTeam).length || state.registrations.filter(r=>r.eventId===ev.id && r.status==='confirmed').length;
   const draw = eventDraw(ev.id);
   const ms = eventMatches(ev.id).filter(m=>m.entry1Id && m.entry2Id && !['bye','cancelled'].includes(m.status));
   const done = ms.filter(m=>['completed','walkover','retired'].includes(m.status)).length;
   const live = ms.filter(m=>m.status==='in_progress').length;
   const pct = ms.length ? Math.round(100*done/ms.length) : 0;
+  const setup = state.role==='admin' && !VIEWER && !tLocked(tournamentById(ev.tournamentId));
   return `<div class="cat-card ev-card" data-open-event="${ev.id}">
-    ${tLocked(tournamentById(ev.tournamentId)) ? '' : `<button class="icon-btn cat-del btn-danger" data-delete-event="${ev.id}" title="Delete event">${ICONS.trash}</button>`}
     <h3>${esc(ev.name)}</h3>
     <div class="sub-txt">${esc(ev.drawFormat.replace(/_/g,' '))} &middot; ${entries} ${isDoublesType(ev.type)&&ev.drawFormat!=='americano'?'teams':'players'}</div>
     ${ev.status==='completed' ? `<div class="champ-banner sm">${ICONS.trophy}<span><small>${eventChampions(ev.id).length?'Champion':'Finished &middot; no matches played'}</small>${esc(eventChampions(ev.id).join(' & '))}</span></div>`
     : draw ? `<div class="ev-prog"><span style="width:${pct}%"></span></div>
       <div class="ev-prog-l"><span>${done} of ${ms.length} matches played</span>${live?`<span class="sb-live">&#9679; ${live} live</span>`:''}</div>`
-      : `<div class="ev-prog-l"><span class="pill">No draw yet</span></div>`}
-    ${state.role==='admin' && !tLocked(tournamentById(ev.tournamentId)) && draw ? `<div class="ev-acts no-print">${ev.status==='completed'
-      ? `<button class="btn btn-sm" data-reopen-event="${ev.id}">${ICONS.undo} Reopen event</button>`
-      : `<button class="btn btn-sm btn-finish" data-finish-event="${ev.id}">${ICONS.trophy} Finish event</button>`}</div>` : ''}
+      : `<div class="ev-prog-l"><span class="pill">No draw yet</span>${setup?`<button class="btn btn-sm btn-primary no-print" data-goto-draws="${ev.id}">Set up draw</button>`:''}</div>`}
   </div>`;
 }
-function renderAdminRegisterRow(t, ev, doubles){
-  const already = new Set();
-  state.registrations.filter(r=>r.eventId===ev.id && r.status!=='withdrawn' && r.status!=='rejected')
-    .forEach(r=>{ already.add(r.playerId); if(r.partnerId) already.add(r.partnerId); });
-  const available = state.players.filter(p=>!already.has(p.id)).sort((a,b)=>a.name.localeCompare(b.name));
-  if(!available.length) return `<div class="helptext" style="margin-bottom:10px">Every player is already registered for this event, or add more players first.</div>`;
-  return `<div class="card" style="margin-bottom:10px">
-    <div class="sub-txt" style="margin-bottom:6px;font-weight:700">Register a player</div>
-    <div class="row wrap" style="gap:8px">
-      <select data-admin-player-select="${ev.id}" style="min-width:160px"><option value="">Choose player&hellip;</option>${available.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select>
-      ${doubles?`<select data-admin-partner-select="${ev.id}" style="min-width:160px"><option value="">Choose partner&hellip;</option>${available.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select>`:''}
-      <button class="btn btn-primary btn-sm" data-admin-register-event="${ev.id}">${ICONS.plus} Register</button>
-    </div>
-    <div class="helptext" style="margin-top:6px">Admin-registered players are confirmed immediately, skipping the pending queue.</div>
-  </div>`;
-}
-function renderEventEntriesSection(t, ev){
+/* ---------- Event players & seeds pop-ups (Settings -> Draws) ---------- */
+function eventSeedsMatter(ev){ return !['round_robin','americano'].includes(ev.drawFormat||'single_elimination'); }
+function eventPlayersBody(ev){
+  const doubles = isDoublesType(ev.type);
   const regs = state.registrations.filter(r=>r.eventId===ev.id);
+  const taken = new Set();
+  regs.filter(r=>r.status!=='withdrawn' && r.status!=='rejected').forEach(r=>{ taken.add(r.playerId); if(r.partnerId) taken.add(r.partnerId); });
+  const available = state.players.filter(p=>!taken.has(p.id)).sort((a,b)=>a.name.localeCompare(b.name));
+  const opts = `${available.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}`;
+  const add = available.length ? `<div class="ev-pop-add">
+      <select data-admin-player-select="${ev.id}" aria-label="Player"><option value="">Add a player&hellip;</option>${opts}</select>
+      ${doubles?`<select data-admin-partner-select="${ev.id}" aria-label="Partner"><option value="">Partner&hellip;</option>${opts}</select>`:''}
+      <button class="btn btn-primary btn-sm" data-admin-register-event="${ev.id}">${ICONS.plus} Add</button>
+    </div>` : `<p class="helptext" style="margin-top:0">Everyone in Players is already in this event.</p>`;
+  const rows = regs.slice().sort((a,b)=>playerName(a.playerId).localeCompare(playerName(b.playerId))).map(r=>`<div class="ev-pop-row">
+      <span class="grow main-txt">${esc(playerName(r.playerId))}${r.partnerId?` / ${esc(playerName(r.partnerId))}`:(doubles?' <span class="sub-txt">(needs a partner)</span>':'')}</span>
+      <select data-reg-status="${r.id}" aria-label="Status">${['pending','confirmed','waitlisted','withdrawn','rejected'].map(st=>`<option value="${st}" ${r.status===st?'selected':''}>${st}</option>`).join('')}</select>
+    </div>`).join('');
+  return add + (regs.length ? rows : `<div class="empty-tab">No one registered yet.</div>`)
+    + `<p class="helptext" style="margin-bottom:0">Only <b>confirmed</b> ${doubles?'pairs':'players'} are in the draw.</p>`;
+}
+function openEventPlayersDialog(evId){
+  const ev = eventById(evId); if(!ev) return;
+  const title = ()=>{ const n = state.registrations.filter(r=>r.eventId===ev.id).length; return ev.name + ' · ' + n + (isDoublesType(ev.type)?' pair':' player') + (n===1?'':'s'); };
+  openDialog(title(), eventPlayersBody(ev), `<button type="button" class="btn btn-primary" data-close>Done</button>`);
+  setDialogRefresher(()=>{ const e = eventById(evId); if(!e) return closeGenericDialog();
+    document.getElementById('genericTitle').textContent = title();
+    const keep = [...document.querySelectorAll('#genericBody .ev-pop-add select')].map(x=>x.value);
+    document.getElementById('genericBody').innerHTML = eventPlayersBody(e);
+    document.querySelectorAll('#genericBody .ev-pop-add select').forEach((x,i)=>{ if(keep[i] && [...x.options].some(o=>o.value===keep[i])) x.value = keep[i]; });
+  });
+}
+function eventSeedsBody(ev){
   const rankByPlayer = rankingPointsByPlayer(ev.tournamentId);
   const entries = eventEntries(ev.id).filter(en=>!en.isAmericanoTeam);
-  const doubles = isDoublesType(ev.type);
-  return `
-    <div class="section-h"><h3>Registrations (${regs.length})</h3><button class="btn btn-sm" id="btnBuildEntries">${ICONS.refresh} Build entries from confirmed</button></div>
-    ${renderAdminRegisterRow(t, ev, doubles)}
-    ${regs.length ? `<div class="table-scroll"><table class="data-table"><thead><tr><th>Player</th><th>Partner</th><th>Status</th><th></th></tr></thead><tbody>
-      ${regs.map(r=>`<tr><td>${esc(playerName(r.playerId))}</td><td>${r.partnerId?esc(playerName(r.partnerId)):(doubles?'<span style="color:var(--faint)">needs partner</span>':'&mdash;')}</td>
-      <td>${regStatusPill(r.status)}</td>
-      <td><select data-reg-status="${r.id}">
-        ${['pending','confirmed','waitlisted','withdrawn','rejected'].map(s=>`<option value="${s}" ${r.status===s?'selected':''}>${s}</option>`).join('')}
-      </select></td></tr>`).join('')}
-    </tbody></table></div>` : `<div class="empty-tab">No registrations yet.</div>`}
-
-    <div class="section-h"><h3>Entries (${entries.length})</h3></div>
-    ${entries.length && !['round_robin','americano'].includes(ev.drawFormat||'single_elimination') ? `<div class="helptext" style="margin-bottom:8px">Seeds (1 = strongest) are kept apart in the draw - 1 and 2 can only meet in the final. If the draw has byes, they go to the highest seeds first; unseeded entries are placed at random. In groups + knockout, seeds are spread across the groups.</div>` : ''}
-    ${entries.length>=2 && !['round_robin','americano'].includes(ev.drawFormat||'single_elimination') ? `<div class="row wrap" style="gap:8px;margin-bottom:8px"><button type="button" class="btn btn-sm" data-suggest-seeds="${ev.id}">${ICONS.chart} Suggest seeds from rankings</button></div>` : ''}
-    ${entries.length ? entries.slice().sort((a,b)=>(validSeed(a.seed)??1e9)-(validSeed(b.seed)??1e9)).map(en=>{ const pts = entryRanking(en, rankByPlayer).points; return `<div class="list-row"><span class="seed-badge">${en.seed||'-'}</span><span class="grow main-txt">${esc(entryName(en))}${pts?` <span class="sub-txt" title="${en.player2Id?'Average ranking points of the pair':'Ranking points'}">&middot; ${fmtPts(pts)} pts${en.player2Id?' avg':''}</span>`:''}</span>
-      <input type="number" min="1" class="mono" style="width:56px;border:1px solid var(--border);border-radius:8px;padding:4px;background:var(--bg);color:var(--ink)" data-seed-input="${en.id}" value="${en.seed==null?'':en.seed}" placeholder="seed">
-    </div>`; }).join('') : `<div class="empty-tab">Build entries from confirmed registrations first.</div>`}
-  `;
+  if(!entries.length) return `<div class="empty-tab">No confirmed ${isDoublesType(ev.type)?'pairs':'players'} yet.</div>`;
+  return `<p class="helptext" style="margin-top:0">1 = strongest. Seeds are kept apart and get any byes first; the rest are drawn at random.</p>
+    ${entries.length>=2 ? `<button type="button" class="btn btn-sm" data-suggest-seeds="${ev.id}" style="margin-bottom:6px">${ICONS.chart} Suggest from rankings</button>` : ''}
+    ${entries.slice().sort((a,b)=>(validSeed(a.seed)??1e9)-(validSeed(b.seed)??1e9) || entryName(a).localeCompare(entryName(b))).map(en=>{ const pts = entryRanking(en, rankByPlayer).points; return `<div class="ev-pop-row">
+      <span class="grow main-txt">${esc(entryName(en))}${pts?` <span class="sub-txt" title="${en.player2Id?'Average ranking points of the pair':'Ranking points'}">&middot; ${fmtPts(pts)} pts${en.player2Id?' avg':''}</span>`:''}</span>
+      <input type="number" min="1" class="mono" style="width:60px" data-seed-input="${en.id}" value="${en.seed==null?'':en.seed}" placeholder="&ndash;" aria-label="Seed">
+    </div>`; }).join('')}`;
+}
+async function openEventSeedsDialog(evId){
+  const ev = eventById(evId); if(!ev) return;
+  // Before a draw exists, bring the entries in line with the confirmed registrations.
+  if(!eventDraw(ev.id)) await buildEntriesFromRegistrations(ev, {quiet:true});
+  openDialog('Seeds · ' + ev.name, eventSeedsBody(ev), `<button type="button" class="btn btn-primary" data-close>Done</button>`);
+  setDialogRefresher(()=>{
+    const e = eventById(evId); if(!e) return closeGenericDialog();
+    if(document.activeElement && document.activeElement.matches && document.activeElement.matches('#genericBody [data-seed-input]')) return;   // don't redraw under the cursor
+    document.getElementById('genericBody').innerHTML = eventSeedsBody(e);
+  });
 }
 /* Americano rotates partners into doubles, so it isn't offered for singles events
    (it stays listed only for an old singles event already set to it, so it can be changed). */
@@ -5303,36 +5339,42 @@ function renderEventDrawCard(t, ev){
   const regs = state.registrations.filter(r=>r.eventId===ev.id);
   const entries = eventEntries(ev.id).filter(en=>!en.isAmericanoTeam);
   const draw = eventDraw(ev.id);
+  const doubles = isDoublesType(ev.type);
+  const confirmed = regs.filter(r=>r.status==='confirmed').length, pending = regs.filter(r=>r.status==='pending').length;
+  const seeded = entries.filter(e=>validSeed(e.seed)!=null).length;
+  const fmt = ev.drawFormat||'single_elimination', variant = ev.americanoVariant||'classic';
+  const hint = (()=>{
+    if(fmt==='group_knockout') return `Groups: ${describeScoring(scoringFor(ev, t, {bracket:'GRP'}))} · knockout: ${describeScoring(scoringFor(ev, t, {bracket:'SE'}))}`;
+    if(fmt!=='americano') return '';
+    const n = entries.length || confirmed;
+    let h = variant.replace(/^./,c=>c.toUpperCase()) + ' · ' + describeScoring(scoringFor(ev, t));
+    if(variant==='classic' && n) h += '. ' + americanoPlanSummary(n);
+    if(variant==='mexicano' && n && n%4) h += `. ${n%4} sit out each round; games even out every ${americanoEqualRoundsStep(n)} rounds.`;
+    return h;
+  })();
+  const mex = draw && draw.format==='americano' && variant==='mexicano';
   return `
-    <div class="card">
+    <div class="card ev-setup">
+      <div class="ev-sum">
+        <span class="grow"><b>${confirmed} ${doubles&&fmt!=='americano'?(confirmed===1?'pair':'pairs'):(confirmed===1?'player':'players')}</b>${pending?` <span class="pill">${pending} pending</span>`:''}${eventSeedsMatter(ev)&&seeded?` <span class="sub-txt">&middot; ${seeded} seeded</span>`:''}</span>
+        <button type="button" class="btn btn-sm" data-ev-players="${ev.id}">${ICONS.users} Players</button>
+        ${eventSeedsMatter(ev)?`<button type="button" class="btn btn-sm" data-ev-seeds="${ev.id}">${ICONS.chart} Seeds</button>`:''}
+      </div>
       <div class="field-row">
-        <div class="field"><label>Format</label><select id="fDrawFormat" data-event-id="${ev.id}">
+        <div class="field" style="flex:1"><label>Format</label><select id="fDrawFormat" data-event-id="${ev.id}">
           ${drawFormatOptionsHtml(ev.type||'singles', ev.drawFormat)}
         </select></div>
-        <div class="field" id="fGroupSizeWrap" ${ev.drawFormat!=='group_knockout'?'hidden':''}><label>Group size</label><input type="number" id="fGroupSize" min="3" max="6" value="${(draw&&draw.groupSize)||4}"></div>
+        <div class="field" id="fGroupSizeWrap" style="width:96px" ${fmt!=='group_knockout'?'hidden':''}><label>Group size</label><input type="number" id="fGroupSize" min="3" max="6" value="${(draw&&draw.groupSize)||4}"></div>
       </div>
-      ${ev.drawFormat==='group_knockout'?`<div class="helptext" style="margin-bottom:8px">Scoring &middot; groups: <b>${esc(describeScoring(scoringFor(ev, t, {bracket:'GRP'})))}</b> &middot; knockout: <b>${esc(describeScoring(scoringFor(ev, t, {bracket:'SE'})))}</b> - change it from Edit event.</div>`:''}
-      ${ev.drawFormat==='americano'?`<div class="helptext" style="margin-bottom:8px">Americano variant: <b>${esc((ev.americanoVariant||'classic').replace(/^./,c=>c.toUpperCase()))}</b> &middot; ${esc(describeScoring(scoringFor(ev, t)))} - change it from Edit event.</div>`:''}
-      ${ev.drawFormat==='americano' && (ev.americanoVariant||'classic')==='mexicano' ? (()=>{
-        const n = entries.length || regs.filter(r=>r.status==='confirmed').length;
-        if(!n || n%4===0) return n ? `<div class="helptext" style="margin-bottom:8px">${n} players: everyone plays every round.</div>` : '';
-        const step = americanoEqualRoundsStep(n);
-        return `<div class="helptext" style="margin-bottom:8px">${n} players: ${n%4} sit out each round - whoever has played most, never the same player two rounds in a row. Game counts are equal after every ${step} rounds (${step}, ${step*2}, ${step*3}&hellip;).</div>`;
-      })() : ''}
-      ${ev.drawFormat==='americano' && (ev.americanoVariant||'classic')==='classic' ? (()=>{
-        const nPlayers = entries.length || regs.filter(r=>r.status==='confirmed').length;
-        return nPlayers ? `<div class="helptext" style="margin-bottom:8px">${esc(americanoPlanSummary(nPlayers))}</div>` : '';
-      })() : ''}
-      <label class="row" style="font-size:12.5px;gap:6px"><input type="checkbox" id="fThirdPlace" ${ev.thirdPlaceMatch?'checked':''}> Third place match</label>
-      <div class="row wrap" style="margin-top:8px">
+      <label class="row" id="fThirdPlaceWrap" style="font-size:12.5px;gap:6px;margin-top:6px" ${['single_elimination','group_knockout'].includes(fmt)?'':'hidden'}><input type="checkbox" id="fThirdPlace" ${ev.thirdPlaceMatch?'checked':''}> Third place match</label>
+      ${hint?`<div class="helptext" style="margin-top:6px">${esc(hint)} <span class="sub-txt">(Edit event to change)</span></div>`:''}
+      <div class="ev-setup-acts">
         <button class="btn btn-primary btn-sm" id="btnGenerateDraw">${ICONS.sparkles} ${draw?'Regenerate draw':'Generate draw'}</button>
         ${draw && draw.format==='group_knockout' && !eventMatches(ev.id).some(m=>m.bracket==='SE') ? `<button class="btn btn-sm" id="btnGenKnockout">Add knockout bracket</button>`:''}
-        ${draw && draw.format==='americano' && (ev.americanoVariant||'classic')==='mexicano' ? `<button class="btn btn-sm" id="btnGenNextMexicanoRound">${ICONS.sparkles} Generate next round</button>`:''}
+        ${mex ? `<button class="btn btn-sm" id="btnGenNextMexicanoRound">${ICONS.sparkles} Next round</button>`:''}
         ${draw && ev.status!=='completed' ? `<button class="btn btn-sm btn-finish" data-finish-event="${ev.id}">${ICONS.trophy} Finish event</button>`:''}
         ${draw && ev.status==='completed' ? `<button class="btn btn-sm" data-reopen-event="${ev.id}">${ICONS.undo} Reopen event</button>`:''}
-        ${false ? `<button class="btn btn-sm" id="btnFinishMexicano">${ICONS.check} Finish event</button>`:''}
       </div>
-      ${draw?`<div class="helptext" style="margin-top:6px">Generated ${esc(fmtDateTime(draw.generatedAt))}. Regenerating a published draw is confirmed and audit-logged.</div>`:''}
     </div>
   `;
 }
@@ -5470,12 +5512,8 @@ function renderAdminDrawsTab(t){
   let selId = state.filters.drawEventId;
   if(!evs.find(e=>e.id===selId)) selId = (evs.find(e=>eventDraw(e.id))||evs[0]).id;
   state.filters.drawEventId = selId;
-  state.eventId = selId;          // the event buttons below (build entries, generate...) act on this event
+  state.eventId = selId;          // the event buttons below (generate, edit, swap...) act on this event
   const ev = eventById(selId), draw = eventDraw(ev.id);
-  const regs = state.registrations.filter(r=>r.eventId===ev.id).length;
-  const entries = eventEntries(ev.id).filter(en=>!en.isAmericanoTeam).length;
-  state.entriesOpen = state.entriesOpen||{};
-  const open = state.entriesOpen[ev.id]!==undefined ? state.entriesOpen[ev.id] : !draw;
   if(evLocked(ev)) return `
     <div class="filter-bar" data-more-scope>
       <select id="fDrawEventSelect">${evs.map(e=>`<option value="${e.id}" ${e.id===selId?'selected':''}>${esc(e.name)}${eventDraw(e.id)?'':' (no draw yet)'}${e.status==='completed'?' \u2713':''}</option>`).join('')}</select>
@@ -5486,18 +5524,15 @@ function renderAdminDrawsTab(t){
     ${lockedNote(t, ev)}
     ${draw ? renderBracketForEvent(ev, false) : ''}`;
   return `
-    <div class="filter-bar" data-more-scope>
-      <select id="fDrawEventSelect">${evs.map(e=>`<option value="${e.id}" ${e.id===selId?'selected':''}>${esc(e.name)}${eventDraw(e.id)?'':' (no draw yet)'}</option>`).join('')}</select>
-      <button class="btn btn-sm no-print m-overflow" id="btnEditEvent">${ICONS.edit} Edit event</button>
-      ${draw?`<button class="btn btn-sm no-print m-overflow" id="btnExportDraw">${ICONS.download} Export CSV</button>
-      <button class="btn btn-sm no-print m-overflow" id="btnPrintDraw">${ICONS.print} Print</button>
-      <button class="btn btn-sm no-print m-overflow" id="btnSwapEntries">${ICONS.refresh} Swap entries&hellip;</button>`:''}
-      ${moreMenuBtn('Event actions')}
+    <div class="filter-bar" data-more-scope data-more-title="${esc(ev.name)}">
+      <select id="fDrawEventSelect" aria-label="Event">${evs.map(e=>`<option value="${e.id}" ${e.id===selId?'selected':''}>${esc(e.name)}${eventDraw(e.id)?'':' (no draw yet)'}</option>`).join('')}</select>
+      <button class="btn btn-sm m-menu-only" id="btnEditEvent">${ICONS.edit} Edit event</button>
+      ${draw?`<button class="btn btn-sm m-menu-only" id="btnSwapEntries">${ICONS.refresh} Swap entries&hellip;</button>
+      <button class="btn btn-sm m-menu-only" id="btnExportDraw">${ICONS.download} Export CSV</button>
+      <button class="btn btn-sm m-menu-only" id="btnPrintDraw">${ICONS.print} Print</button>`:''}
+      <button class="btn btn-sm btn-danger m-menu-only" data-delete-event="${ev.id}">${ICONS.trash} Delete event</button>
+      ${moreMenuBtn('Event actions', true)}
     </div>
-    <details class="card m-details ev-entries" id="evEntriesBox" data-ev="${ev.id}" ${open?'open':''}>
-      <summary><span class="grow">Players &amp; entries</span><span class="sub-txt">${regs} registered &middot; ${entries} ${entries===1?'entry':'entries'}</span></summary>
-      ${renderEventEntriesSection(t, ev)}
-    </details>
     ${renderEventDrawCard(t, ev)}
     ${draw ? `<div class="no-print-gap"></div>${renderBracketForEvent(ev, true)}` : ''}
   `;
@@ -6172,10 +6207,9 @@ const GUIDE = [
   ]},
   {id:'entries', title:'4 · Register players and set seeds', steps:[
     'Go to <b>Settings → Draws</b> and pick the event at the top.',
-    'Open <b>Players &amp; entries</b>. Under <b>Register a player</b>, choose a player (and a partner for doubles) and tap <b>Register</b>. Repeat for everyone.',
+    'Tap <b>Players</b>, choose a player (and a partner for doubles) and tap <b>Add</b>. Repeat for everyone. Each one has a status; only <b>confirmed</b> players (or pairs) go into the draw.',
     'Mixed doubles: once you pick the player, partners of the same gender (or with no gender set) are greyed out. Set each player’s gender in Players first.',
-    'Tap <b>Build entries from confirmed</b>. This turns the registrations into the entries used by the draw.',
-    'Seeds (1 = strongest): type them next to each entry, or tap <b>Suggest seeds from rankings</b>. It uses ranking points from earlier tournaments (a doubles pair gets the average of its two players), shows a preview, and you tap <b>Apply seeds</b>. You can still change any seed afterwards.',
+    'Seeds (1 = strongest, for knockout and groups): tap <b>Seeds</b> and type them next to each entry, or tap <b>Suggest from rankings</b>. It uses ranking points from earlier tournaments (a doubles pair gets the average of its two players), shows a preview, and you tap <b>Apply seeds</b>. You can still change any seed afterwards.',
     'Seeds are kept apart in the draw (1 and 2 can only meet in the final), and if the draw has byes, the highest seeds get them. In groups + knockout, seeds are spread across the groups.'
   ]},
   {id:'draw', title:'5 · Generate the draw (creates the matches)', steps:[
@@ -6187,7 +6221,7 @@ const GUIDE = [
   ]},
   {id:'matches', title:'6 · Schedule and play matches', steps:[
     'Open the <b>Matches</b> tab. Matches are grouped: <b>On court now</b>, <b>Schedule</b> (by start time), <b>Not scheduled yet</b> and <b>Completed</b>.',
-    'Tap an event on the <b>Events</b> tab to see only that event’s matches; Settings → Draws then opens on the same event. If it has no draw yet, tap <b>Generate the draw</b>.',
+    'Tap an event on the <b>Events</b> tab to see only that event’s matches; Settings → Draws then opens on the same event. An event without a draw has a <b>Set up draw</b> button on its card.',
     'Filter by event, court, status, date or player. <b>Clear filters</b> appears while any filter is on and resets them all.',
     'Use <b>Schedule a match…</b> or the calendar button on a match to give it a court and time. The duration starts at the tournament’s <b>Match duration</b>, and the app keeps the rest time between a player’s matches.',
     'Later rounds are listed too, before their players are known (e.g. “Winner of Quarterfinal 1”, or A1 vs B2 in groups + knockout). You can already give them a court and time, and they keep it when the names fill in. A match can’t be booked before the matches feeding it end (plus rest), and the app suggests the earliest time.',
@@ -6197,7 +6231,7 @@ const GUIDE = [
   ]},
   {id:'results', title:'7 · Results, champions and rankings', steps:[
     '<b>Results</b> shows each event’s standings (wins-losses, points won, rank points). <b>Match results</b> at the bottom takes you to the scores of every match.',
-    'When an event is done, tap <b>Finish event</b> on its card in the Events tab (or in Settings → Draws). Unplayed matches are cancelled and the champion is published. <b>Reopen event</b> undoes it.',
+    'When an event is done, tap <b>Finish event</b> in Settings → Draws. Unplayed matches are cancelled and the champion is published. <b>Reopen event</b> undoes it.',
     'A groups + knockout event only finishes after its knockout has been played, not when the groups end.',
     'To close the whole tournament use <b>⋯ → Finish tournament</b> at the top; <b>Reopen tournament</b> is in the same menu.',
     'A finished event or tournament is locked: no new players, courts, draws, schedule changes or scores until you reopen it.',
@@ -6219,7 +6253,7 @@ const GUIDE = [
 function renderGuideView(){
   state.guideOpen = state.guideOpen || {tournament:true};
   return `
-    <div class="guide-intro">${ICONS.info}<div><b>Quick start:</b> Tournament → Players → Event → Register &amp; build entries → Seeds (optional) → Generate draw → Start and score matches → Finish.<br><span>Want to see it with data first? Load the demo in Settings → Data (only when the app is empty).</span></div></div>
+    <div class="guide-intro">${ICONS.info}<div><b>Quick start:</b> Tournament → Players → Event → Add players to the event → Seeds (optional) → Generate draw → Start and score matches → Finish.<br><span>Want to see it with data first? Load the demo in Settings → Data (only when the app is empty).</span></div></div>
     ${GUIDE.map(sec=>`<details class="guide-sec" data-guide="${sec.id}" ${state.guideOpen[sec.id]?'open':''}>
       <summary>${esc(sec.title)}</summary>
       <ol>${sec.steps.map(x=>`<li>${x}</li>`).join('')}</ol>
@@ -6405,6 +6439,7 @@ function renderLiveScoringScreen(m){
 
 /* ---------- GENERIC DIALOG SYSTEM ---------- */
 function openDialog(title, bodyHtml, footHtml){
+  dialogRefresher = null;   // new content: the previous pop-up's live refresh no longer applies
   document.getElementById('genericTitle').textContent = title;
   document.getElementById('genericBody').innerHTML = bodyHtml;
   document.getElementById('genericFoot').innerHTML = footHtml;
@@ -6416,12 +6451,12 @@ function openDialog(title, bodyHtml, footHtml){
    button opens them as a bottom sheet. The sheet clicks the real (hidden)
    button, so every existing handler keeps working unchanged. */
 function isPhone(){ try{ return window.matchMedia('(max-width:700px)').matches; }catch(e){ return false; } }
-function moreMenuBtn(label){
-  return `<button type="button" class="btn btn-sm m-more-btn mobile-only" data-more-menu="1" aria-label="${esc(label||'More actions')}" title="${esc(label||'More actions')}">${ICONS.more}</button>`;
+function moreMenuBtn(label, always){
+  return `<button type="button" class="btn btn-sm m-more-btn ${always?'always':'mobile-only'}" data-more-menu="1" aria-label="${esc(label||'More actions')}" title="${esc(label||'More actions')}">${ICONS.more}</button>`;
 }
 function openMoreSheet(trigger){
   const scope = trigger.closest('[data-more-scope]') || trigger.parentElement;
-  const items = [...scope.querySelectorAll('.m-overflow')].filter(b=>b.tagName==='BUTTON' || b.tagName==='A');
+  const items = [...scope.querySelectorAll('.m-overflow, .m-menu-only')].filter(b=>b.tagName==='BUTTON' || b.tagName==='A');
   openActionSheet(scope.getAttribute('data-more-title') || '', items.map(b=>({
     html: b.innerHTML, disabled: b.disabled,
     kind: b.classList.contains('btn-danger') ? 'danger' : b.classList.contains('btn-primary') ? 'primary' : '',
@@ -6755,7 +6790,7 @@ function openEventDialog(tid, existing){
   const AM_VARIANT_HINTS = {
     classic: 'Full schedule is generated up front: with n players, everyone partners every other player exactly once (or close to it).',
     mixed: 'Requires an equal number of men and women (min. 4 each); every team is one man + one woman, rotated so pairings vary each round.',
-    mexicano: 'Only the next round is generated at a time. After a round finishes, use "Generate next round" to pair 1st with 3rd, 2nd with 4th, etc. from the live standings.'
+    mexicano: 'Only the next round is generated at a time. After a round finishes, use "Next round" (Settings → Draws) to pair 1st with 3rd, 2nd with 4th, etc. from the live standings.'
   };
   function refreshAmVariantHint(){ amVariantHint.textContent = AM_VARIANT_HINTS[document.getElementById('fEAmVariant').value] || ''; }
   refreshAmVariantHint();
@@ -7283,7 +7318,6 @@ document.addEventListener('click', async (e)=>{
     case 'btnNewEvent': if(t){ if(t.status==='completed'){ toast('This tournament is finished. Reopen it to add events.', true); return; } openEventDialog(t.id); } return;
     case 'btnReopenTournament': if(t){ await confirmReopenTournament(t); render(); } return;
     case 'btnEditEvent': { const ev=eventById(state.eventId); if(ev) openEventDialog(t.id, ev); return; }
-    case 'btnBuildEntries': { const ev=eventById(state.eventId); if(ev){ await buildEntriesFromRegistrations(ev); render(); } return; }
     case 'btnGenerateDraw': {
       const ev = eventById(state.eventId); if(!ev) return;
       const draw = eventDraw(ev.id);
@@ -7465,6 +7499,8 @@ document.addEventListener('click', async (e)=>{
     ['data-nav', v=>goto(v)],
     ['data-tab', v=>{ state.tab=v; state.eventId=null; render(); window.scrollTo(0,0); }],
     ['data-open-event', v=>{ state.eventId=null; state.tab='matches'; state.filters.matches = {eventId:v}; state.filters.drawEventId = v; render(); window.scrollTo(0,0); }],
+    ['data-ev-players', v=>openEventPlayersDialog(v)],
+    ['data-ev-seeds', v=>openEventSeedsDialog(v)],
     ['data-goto-draws', v=>{ state.filters.drawEventId = v; state.eventId = v; state.tab='draws'; render(); window.scrollTo(0,0); }],
     ['data-back-events', ()=>{ state.eventId=null; render(); window.scrollTo(0,0); }],
     ['data-delete-event', async v=>{ if(await confirmDialog('Delete this event and all its data?')) await deleteEventCascade(v); }],
@@ -7573,6 +7609,8 @@ document.addEventListener('change', async (e)=>{
   if(target.id==='fDrawFormat'){
     const wrap = document.getElementById('fGroupSizeWrap');
     if(wrap) wrap.hidden = target.value!=='group_knockout';
+    const tp = document.getElementById('fThirdPlaceWrap');
+    if(tp) tp.hidden = !['single_elimination','group_knockout'].includes(target.value);
     const eventId = target.getAttribute('data-event-id');
     if(eventId) await updateEvent(eventId, {drawFormat: target.value});
     return;
@@ -7603,8 +7641,6 @@ function postRenderHooks(){
   const acts = !VIEWER && document.querySelector('.main .t-header .t-actions');
   if(slot && acts){ slot.appendChild(acts); }
   document.querySelectorAll('details[data-guide]').forEach(d=>d.addEventListener('toggle', ()=>{ state.guideOpen = state.guideOpen||{}; state.guideOpen[d.getAttribute('data-guide')] = d.open; }));
-  const entBox = document.getElementById('evEntriesBox');
-  if(entBox) entBox.addEventListener('toggle', ()=>{ state.entriesOpen = state.entriesOpen||{}; state.entriesOpen[entBox.getAttribute('data-ev')] = entBox.open; });
   const addForm = document.getElementById('tAddPlayerForm');
   if(addForm) addForm.addEventListener('toggle', ()=>{ state.tAddOpen = addForm.open; });
   // Keep the active tab visible in the sideways-scrolling tab strip (phones).
