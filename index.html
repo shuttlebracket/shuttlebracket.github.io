@@ -1176,7 +1176,7 @@ const SHARE_DEFAULTS = {"url": "https://iimurggownawprcgmfas.supabase.co", "key"
 const SHARE_BUILTIN = !!(SHARE_DEFAULTS.url && SHARE_DEFAULTS.key && SHARE_DEFAULTS.viewerUrl);
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20261004.175948';
+const APP_BUILD = '20261004.180819';
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -6151,7 +6151,7 @@ function renderAdminTournamentPlayersTab(t){
   `;
 }
 function rankPillHtml(r){
-  return r ? `<span class="pill rank-pill" title="Ranking: #${r.rank} with ${r.rankingPoints} points">#${r.rank} &middot; ${r.rankingPoints} pts${trendHtml(r.trend, true)}</span>` : `<span class="pill" style="color:var(--faint)">Unranked</span>`;
+  return r ? `<span class="pill rank-pill" title="Current ranking">Rank #${r.rank}</span>` : `<span class="pill" style="color:var(--faint)">Unranked</span>`;
 }
 function renderPlayerCards(players){
   if(!players.length) return `<div class="empty-tab">No players to show.</div>`;
@@ -6335,7 +6335,7 @@ const GUIDE = [
     'To close the whole tournament use <b>⋯ → Finish tournament</b> at the top; <b>Reopen tournament</b> is in the same menu.',
     'A finished event or tournament is locked: no new players, courts, draws, schedule changes or scores until you reopen it.',
     '<b>Rankings</b> (bottom bar) adds up ranking points from every event. Tap <b>How points work</b> there for the table. Filter by gender or club, and use <b>Clear filters</b> to reset.',
-    'Next to each rank, ▲ / ▼ shows how many places a player moved since before the latest tournament (a grey ▲▼ = no change, NEW = first ranked there). Each player’s rank and points also show on their card in <b>Players</b>.'
+    'Next to each rank, ▲ / ▼ shows how many places a player moved since before the latest tournament (a grey ▲▼ = no change, NEW = first ranked there). Each player’s current rank also shows on their card in <b>Players</b>.'
   ]},
   {id:'share', title:'8 · Share a live link', steps:[
     ...(SHARE_BUILTIN ? [] : ['One-time setup: in the app <b>Settings → Live sharing</b>, enter your Supabase project URL, key and viewer page address, then <b>Test connection</b>.']),
@@ -7340,7 +7340,7 @@ function openPlayerDetailDialog(player){
       <div class="stat-tile accent"><div class="stat-num">${stats?stats.wins:0}-${stats?stats.losses:0}</div><div class="stat-label">W-L</div></div>
       <div class="stat-tile gold"><div class="stat-num">${stats?stats.titles:0}</div><div class="stat-label">Titles</div></div>
       <div class="stat-tile"><div class="stat-num">${stats?stats.rankingPoints:0}</div><div class="stat-label">Points</div></div>
-      ${(()=>{ const r = rankByPlayerId()[player.id]; return `<div class="stat-tile"><div class="stat-num">${r?'#'+r.rank:'&ndash;'}${r?' '+trendHtml(r.trend, true):''}</div><div class="stat-label">Rank</div></div>`; })()}
+      ${(()=>{ const r = rankByPlayerId()[player.id]; return `<div class="stat-tile"><div class="stat-num">${r?'#'+r.rank:'&ndash;'}</div><div class="stat-label">Rank</div></div>`; })()}
     </div>
   `;
   openDialog(player.name, body, `<button type="button" class="btn" data-close>Close</button>${state.role==='admin'?`<button type="button" class="btn btn-primary" id="btnEditPlayerFromDetail">${ICONS.edit} Edit</button>`:''}`);
