@@ -1178,7 +1178,7 @@ const SHARE_DEFAULTS = {"url": "https://iimurggownawprcgmfas.supabase.co", "key"
 const SHARE_BUILTIN = !!(SHARE_DEFAULTS.url && SHARE_DEFAULTS.key && SHARE_DEFAULTS.viewerUrl);
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20261005.132454';
+const APP_BUILD = '20261005.134035';
 /* scripts/build_web.py sets this to true in the public viewer page (GitHub
    Pages): opened without a live link it shows a short landing page, never the
    organiser app, which only ships inside the iOS app. */
@@ -1413,7 +1413,7 @@ const CloudUI = (function(){
     const i = info;
     const when = i.lastSync ? new Date(i.lastSync) : null;
     const status = !i.known ? 'Checking iCloud&hellip;'
-      : !i.available ? `${ICONS.warn.replace('<svg ','<svg width="13" height="13" style="vertical-align:-2px" aria-hidden="true" ')} iCloud isn't available. Sign in to iCloud in the iPhone's Settings app. If you are signed in, this build of the app doesn't have iCloud switched on yet (it needs the paid Apple Developer Program; see the README).`
+      : !i.available ? `${ICONS.warn.replace('<svg ','<svg width="13" height="13" style="vertical-align:-2px" aria-hidden="true" ')} iCloud isn't available. Sign in to iCloud in the Settings app (and turn on iCloud Drive), then come back here.`
       : i.enabled ? `On. ${when && !isNaN(when) ? 'Last synced '+esc(fmtDateTime(when.toISOString()))+'.' : 'Waiting for the first sync.'}`
       : 'Off. Your data stays on this device only.';
     return `<div class="card" id="cloudSettingsCard">
@@ -1487,6 +1487,8 @@ const ViewerPageCheck = { result:null, running:false,
 };
 function viewerPageStatusHtml(){
   const r = ViewerPageCheck.result;
+  // A developer notice (upload the new viewer page): only in builds run from Xcode, never in App Store builds.
+  if(SHARE_BUILTIN && !window.__SB_DEBUG__) return '<div id="viewerPageStatus"></div>';
   if(!r || r.state==='current') return '<div id="viewerPageStatus"></div>';
   if(r.state==='outdated') return `<div id="viewerPageStatus" class="reg-banner closed" style="margin:10px 0">${ICONS.warn}<span><b>Your viewer page is out of date.</b> People opening a live link see an older version (without the latest fixes). Upload <b>sharing/viewer-site/index.html</b> from the ShuttleBracket-iOS folder to your GitHub repository again.</span></div>`;
   return `<div id="viewerPageStatus" class="helptext" style="margin:8px 0">Couldn't check the viewer page${r.detail?' ('+esc(r.detail)+')':''}. Make sure the Viewer page address opens in a browser.</div>`;
@@ -1539,7 +1541,18 @@ const ShareAPI = {
     }
     return json;
   },
+  /* What to tell the user. With sharing built in (App Store build) the server
+     is ours, so set-up problems (URL, key, paused project, missing SQL) are
+     never the user's to fix: they get a plain message instead. Problems people
+     can act on (offline, expired, too big, too many links) keep their wording. */
   explain(e){
+    if(SHARE_BUILTIN && e && !e.tooLarge && !/^SB(403|410|413|429|507)$/.test(e.code||'') && e.code!=='42501'){
+      if(e.offline && !e.timeout) return 'No internet connection. Check it and try again.';
+      return 'Live links are unavailable right now. Please try again in a little while.';
+    }
+    return this.explainSetup(e);
+  },
+  explainSetup(e){
     if(!e) return 'Unknown error';
     if(e.offline && inClaudeFrame()) return 'This page is running inside Claude, which doesn\'t let pages send data to other websites, so it can\'t reach Supabase. Create and update live links from the iPhone app (or your hosted copy of the app) instead.';
     if(e.timeout) return 'No answer from Supabase within 15 seconds. Check the Project URL (it looks like https://abcdefgh.supabase.co) and that the project isn\'t paused.';
@@ -6744,7 +6757,7 @@ function openTournamentDialog(existing){
     </div>
     <div class="field"><label>Venue</label><input id="fTVenue" value="${esc(t.venue||'')}" placeholder="Riverside Sports Hall"></div>
     <div class="field"><label>Organizer</label><input id="fTOrganizer" value="${esc(t.organizer||'')}"></div>
-    <div class="field"><label>Sponsors <span style="font-weight:400;color:var(--muted)">(optional)</span></label><textarea id="fTSponsors" rows="2" maxlength="600" placeholder="Yonex, City Sports Shop, Riverside Café">${esc(t.sponsors||'')}</textarea>
+    <div class="field"><label>Sponsors <span style="font-weight:400;color:var(--muted)">(optional)</span></label><textarea id="fTSponsors" rows="2" maxlength="600" placeholder="City Sports Shop, Riverside Café, Northside Rackets">${esc(t.sponsors||'')}</textarea>
       <div class="helptext">Separate sponsors with commas or new lines. They scroll along under the tabs on the tournament's live link.</div></div>
     <div class="field-row">
       <div class="field"><label>Courts</label><input type="number" id="fTCourts" value="${t.numCourts||4}"></div>
