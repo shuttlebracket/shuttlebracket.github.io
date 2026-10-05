@@ -1178,7 +1178,11 @@ const SHARE_DEFAULTS = {"url": "https://iimurggownawprcgmfas.supabase.co", "key"
 const SHARE_BUILTIN = !!(SHARE_DEFAULTS.url && SHARE_DEFAULTS.key && SHARE_DEFAULTS.viewerUrl);
 /* Build stamp: scripts/build_web.py writes the same id into the app and into the
    viewer page, so the app can tell when the viewer page on GitHub is out of date. */
-const APP_BUILD = '20261004.181950';
+const APP_BUILD = '20261005.132454';
+/* scripts/build_web.py sets this to true in the public viewer page (GitHub
+   Pages): opened without a live link it shows a short landing page, never the
+   organiser app, which only ships inside the iOS app. */
+const VIEWER_ONLY = true;
 /* Opened from a share link (#s=<id>&p=<project>&k=<key>)? Then this page is a
    read-only live viewer of that one tournament and never touches local data. */
 const VIEWER = (function(){
@@ -7787,11 +7791,37 @@ function applyStoredTheme(){
 document.addEventListener('focusin', e=>{ if(e.target.matches && e.target.matches('input,select,textarea')) document.body.classList.add('kb-open'); });
 document.addEventListener('focusout', ()=>{ setTimeout(()=>{ const a=document.activeElement; if(!(a && a.matches && a.matches('input,select,textarea'))) document.body.classList.remove('kb-open'); }, 50); });
 
+/* Public viewer page opened without a live link: explain what it is and let a
+   pasted link be opened. No local data, no organiser screens. */
+function renderViewerLanding(){
+  document.title = 'Shuttle Bracket · Live tournaments';
+  app.innerHTML = `<div class="shell viewer-shell"><div class="topbar no-print"><div class="brand"><div class="brand-mark">${ICONS.shuttle}</div>
+      <h1 class="brand-name">Shuttle<span class="accent">Bracket</span></h1></div></div>
+    <div class="empty-hero" style="margin-top:28px"><span class="kicker">Live tournament viewer</span>
+      <h2>Follow a tournament live</h2>
+      <p>This page shows live scores, the schedule, results and standings for tournaments shared from the Shuttle Bracket app. Open the live link or scan the QR code the organiser gave you.</p>
+      <form id="landingForm" class="row wrap" style="gap:8px;justify-content:center;margin-top:14px">
+        <input id="landingLink" type="url" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Paste a live link" aria-label="Live link"
+          style="flex:1 1 240px;max-width:420px;border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--surface);color:var(--ink);font:inherit">
+        <button class="btn btn-primary" type="submit">Open</button>
+      </form>
+      <p class="helptext" id="landingMsg" style="margin-top:8px"></p>
+    </div></div>`;
+  document.getElementById('landingForm').onsubmit = e=>{
+    e.preventDefault();
+    const v = document.getElementById('landingLink').value.trim(), i = v.indexOf('#');
+    const hash = i>=0 ? v.slice(i) : '';
+    if(/[#&]s=/.test(hash)){ location.hash = hash.slice(1); location.reload(); }
+    else document.getElementById('landingMsg').textContent = "That doesn't look like a Shuttle Bracket live link. Ask the organiser to share it again.";
+  };
+}
+
 /* ============================== BOOT ============================== */
 const COLLECTIONS = ['tournaments','clubs','players','events','registrations','entries','draws','matches','courts','notifications','auditLog','settings'];
 (async function boot(){
   applyStoredTheme();
   if(VIEWER){ ViewerMode.start(); return; }
+  if(VIEWER_ONLY){ renderViewerLanding(); window.addEventListener('hashchange', ()=>location.reload()); return; }
   try{
     await Store.init();
     let pending = COLLECTIONS.length;
